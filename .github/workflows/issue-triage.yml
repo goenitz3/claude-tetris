@@ -1,0 +1,148 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+# Si alguien edita el issue varias veces seguidas, cancelamos el triage en curso
+# y nos quedamos solo con el último.
+concurrency:
+  group: triage-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # No triageamos issues abiertos por bots (evita ruido y bucles).
+    if: github.event.issue.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # necesario para etiquetar y comentar
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Asegurar labels del proyecto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ensure() { gh label create "$1" --color "$2" --description "$3" --force; }
+
+          # Tipo
+          ensure "bug"                 "d73a4a" "Algo no funciona como debería"
+          ensure "feature"             "0e8a16" "Nueva funcionalidad o mejora"
+          ensure "docs"                "0075ca" "README, CLAUDE.md o comentarios"
+          ensure "ci"                  "5319e7" "GitHub Actions y automatización"
+          ensure "question"            "d876e3" "Duda o petición de aclaración"
+
+          # Área (según la arquitectura descrita en CLAUDE.md)
+          ensure "area:gameplay"       "1d76db" "Loop, spawn, colisiones, rotación, bloqueo de piezas"
+          ensure "area:rendering"      "1d76db" "Dibujo en canvas, colores, next-canvas"
+          ensure "area:ui"             "1d76db" "index.html, style.css, overlay, layout"
+          ensure "area:controls"       "1d76db" "Teclado y manejo de input"
+          ensure "area:scoring"        "1d76db" "Puntuación, líneas, nivel y velocidad"
+
+          # Prioridad
+          ensure "priority:p0"         "b60205" "Crítico: el juego no arranca o es injugable"
+          ensure "priority:p1"         "fbca04" "Importante: afecta al juego pero hay workaround"
+          ensure "priority:p2"         "c2e0c6" "Menor: cosmético o nice-to-have"
+
+          # Estado
+          ensure "needs-info"          "e4e669" "Falta información para poder implementar"
+          ensure "ready-to-implement"  "0e8a16" "Diagnóstico completo: listo para implementar"
+
+      - name: Run Claude triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh api:*),Bash(gh label list:*),Read,Grep,Glob"'
+          prompt: |
+            Eres el triager de issues de este repositorio: un Tetris en JavaScript vanilla
+            (HTML5 Canvas + CSS), sin dependencias, sin build y sin tests. Todo el código
+            está en `game.js` (~300 líneas, un módulo, estado en globals), más `index.html`
+            y `style.css`. Lee `CLAUDE.md` para conocer la arquitectura y las convenciones
+            antes de opinar.
+
+            Tu trabajo con el issue #${{ github.event.issue.number }} tiene dos partes:
+            asignarle labels y publicar un diagnóstico técnico que sirva DESPUÉS como
+            especificación para implementar la solución. El diagnóstico es lo importante:
+            debe estar basado en el código que has leído, no en generalidades.
+
+            ## 1. Analiza
+
+            - `gh issue view ${{ github.event.issue.number }} --json title,body,labels,comments`
+            - Lee el código relevante (`game.js`, `index.html`, `style.css`, `README.md`).
+              Localiza las funciones concretas implicadas: `init`, `loop`, `spawn`,
+              `lockPiece`, `merge`, `clearLines`, `collide`, `rotateCW`, `tryRotate`,
+              `draw*`, `endGame`, y las constantes `PIECES`, `COLORS`, `COLS`, `ROWS`, `BLOCK`.
+
+            ## 2. Etiqueta
+
+            Con `gh issue edit ${{ github.event.issue.number }} --add-label "...,..."`, elige:
+            - Exactamente UN tipo: `bug`, `feature`, `docs`, `ci` o `question`.
+            - Una o más áreas: `area:gameplay`, `area:rendering`, `area:ui`, `area:controls`, `area:scoring`.
+            - Exactamente UNA prioridad: `priority:p0` (injugable), `priority:p1` (afecta al
+              juego, hay workaround) o `priority:p2` (cosmético / nice-to-have).
+            - Exactamente UN estado: `ready-to-implement` si tienes lo necesario para que
+              alguien escriba el código, o `needs-info` si falta información imprescindible.
+            No inventes labels nuevos: usa solo los de esa lista.
+
+            ## 3. Publica el diagnóstico
+
+            Escribe un comentario EN ESPAÑOL que empiece literalmente con el marcador
+            `<!-- claude-triage -->` y siga esta plantilla:
+
+            ```
+            <!-- claude-triage -->
+            ## 🔍 Diagnóstico automático
+
+            ### Resumen
+            El problema en una o dos frases.
+
+            ### Comportamiento actual vs. esperado
+            Qué hace hoy y qué debería hacer. Si es una feature, qué falta.
+
+            ### Archivos y funciones implicadas
+            - `game.js` → `nombreDeFuncion()` (líneas aprox.): por qué es relevante.
+            - ...
+
+            ### Causa raíz probable
+            Hipótesis concreta apoyada en el código leído. Si no estás seguro, dilo y explica
+            qué haría falta para confirmarlo.
+
+            ### Enfoque de solución propuesto
+            Pasos concretos. Respeta las convenciones del repo: sin dependencias ni build,
+            comentarios y UI en español e identificadores en inglés, estilo compacto en los
+            bucles de dibujo/colisión, `PIECES` y `COLORS` alineados en el mismo orden, y las
+            dimensiones del `<canvas id="board">` en `index.html` iguales a `COLS*BLOCK × ROWS*BLOCK`.
+
+            ### Criterios de aceptación
+            - [ ] Lista verificable abriendo el juego en el navegador (no hay tests).
+
+            ### Riesgos y dudas abiertas
+            Lo que puede romperse o lo que falta por aclarar. Si el estado es `needs-info`,
+            haz aquí las preguntas concretas al autor.
+
+            ---
+            Cuando el diagnóstico sea correcto, comenta `@claude implementa esto` para que
+            Claude abra un PR con la solución.
+            ```
+
+            ## 4. No dupliques
+
+            Este workflow también se ejecuta al EDITAR el issue. Antes de comentar, busca un
+            comentario previo tuyo que contenga `<!-- claude-triage -->`:
+
+            `gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments --jq '.[] | select(.body | contains("claude-triage")) | .id'`
+
+            - Si existe, ACTUALÍZALO con
+              `gh api -X PATCH repos/${{ github.repository }}/issues/comments/<ID> -f body=@archivo`
+              (escribe el cuerpo a un fichero temporal para evitar problemas de escapado).
+            - Si no existe, créalo con `gh issue comment ${{ github.event.issue.number }} --body-file <archivo>`.
+
+            Nunca dejes dos comentarios de triage en el mismo issue.
