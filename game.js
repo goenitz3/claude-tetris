@@ -28,6 +28,9 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+const THEME_KEY = 'tetris-theme';
+const GRID_COLORS = { dark: '#22222e', light: '#d8d8e4' };
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -39,6 +42,7 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const themeToggle = document.getElementById('theme-toggle');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
@@ -169,7 +173,8 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#22222e';
+  const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  ctx.strokeStyle = GRID_COLORS[theme];
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -300,5 +305,22 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  themeToggle.textContent = theme === 'light' ? '☀️' : '🌙';
+  themeToggle.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
+  themeToggle.setAttribute('aria-label', theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+  localStorage.setItem(THEME_KEY, theme);
+  if (board) draw();
+}
+
+function toggleTheme() {
+  const isLight = document.documentElement.dataset.theme === 'light';
+  applyTheme(isLight ? 'dark' : 'light');
+}
+
+themeToggle.addEventListener('click', toggleTheme);
+applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
 
 init();
