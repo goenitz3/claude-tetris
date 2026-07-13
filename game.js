@@ -199,6 +199,9 @@ function draw() {
     for (let c = 0; c < COLS; c++)
       drawBlock(ctx, c, r, board[r][c], BLOCK);
 
+  // con el juego terminado no hay pieza en juego: solo el tablero fijado
+  if (gameOver) return;
+
   // ghost
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
@@ -226,6 +229,7 @@ function drawNext() {
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
+  draw();
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -246,6 +250,7 @@ function togglePause() {
 }
 
 function loop(ts) {
+  if (gameOver || paused) return;
   const dt = ts - lastTime;
   lastTime = ts;
   dropAccum += dt;
@@ -258,6 +263,8 @@ function loop(ts) {
     }
   }
   draw();
+  // lockPiece() puede haber disparado endGame(): no reagendar el frame
+  if (gameOver || paused) return;
   animId = requestAnimationFrame(loop);
 }
 
