@@ -14,6 +14,7 @@ const COLORS = [
   '#64b5f6', // J - azul
   '#ffb74d', // L - orange
   '#b0bec5', // N - tuerca (gris acero)
+  '#1c1c1c', // B - bomba (negro)
 ];
 
 const PIECES = [
@@ -26,12 +27,22 @@ const PIECES = [
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
   [[8,8,8],[8,0,8],[8,8,8]],                  // N - tuerca (hueco central)
+  [[9]],                                       // B - bomba (1 celda, explota en 3x3)
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 const NUT = 8;
 const NUT_CHANCE = 0.1;
+
+// la bomba no se sortea: cae cuando el tablero supera COVER_START de cobertura,
+// y luego cada COVER_STEP adicional. Si la cobertura baja de COVER_START, se rearma.
+const BOMB = 9;
+const BOMB_SIZE = 3;
+const BOMB_RADIUS = 1; // (BOMB_SIZE - 1) / 2, a cada lado
+const COVER_START = 0.5;
+const COVER_STEP = 0.1;
+const BOMB_SCORE = 10;
 
 const THEME_KEY = 'tetris-theme';
 const GRID_COLORS = { dark: '#22222e', light: '#d8d8e4' };
@@ -49,7 +60,7 @@ const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId, bombThreshold;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -60,6 +71,38 @@ function randomPiece() {
   const type = Math.random() < NUT_CHANCE ? NUT : Math.floor(Math.random() * 7) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+}
+
+function bombPiece() {
+  return { type: BOMB, shape: [[BOMB]], x: Math.floor(COLS / 2), y: 0 };
+}
+
+function coverage() {
+  let filled = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (board[r][c]) filled++;
+  return filled / (ROWS * COLS);
+}
+
+// arma o dispara la bomba según lo lleno que esté el tablero
+function checkBomb() {
+  const cov = coverage();
+  if (cov < COVER_START) { bombThreshold = COVER_START; return; }
+  if (cov >= bombThreshold) {
+    bombThreshold = Math.min(1, bombThreshold + COVER_STEP);
+    next = bombPiece(); // se ve venir en el preview "Siguiente"
+  }
+}
+
+// la bomba se posa SOBRE la pila, así que el 3x3 muerde hacia abajo (su fila + las 2
+// siguientes): un 3x3 centrado en ella solo rasparía la superficie y no dejaría hueco
+function explode() {
+  let destroyed = 0;
+  for (let r = current.y; r < current.y + BOMB_SIZE; r++)
+    for (let c = current.x - BOMB_RADIUS; c <= current.x + BOMB_RADIUS; c++)
+      if (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r][c]) { board[r][c] = 0; destroyed++; }
+  score += destroyed * BOMB_SCORE;
 }
 
 function collide(shape, ox, oy) {
@@ -85,6 +128,7 @@ function rotateCW(shape) {
 }
 
 function tryRotate() {
+  if (current.type === BOMB) return; // la bomba no rota
   const rotated = rotateCW(current.shape);
   const kicks = [0, -1, 1, -2, 2];
   for (const kick of kicks) {
@@ -146,9 +190,13 @@ function softDrop() {
 }
 
 function lockPiece() {
-  merge();
+  // la bomba detona en vez de fijarse: board nunca contiene el índice BOMB
+  if (current.type === BOMB) explode();
+  else merge();
   clearLines();
+  checkBomb();
   spawn();
+  updateHUD();
 }
 
 function spawn() {
@@ -175,6 +223,21 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   // highlight
   context.fillStyle = 'rgba(255,255,255,0.12)';
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (colorIndex === BOMB) {
+    // cuerpo esférico + mecha, para que el negro se distinga del fondo
+    const cx = x * size + size / 2;
+    const cy = y * size + size / 2;
+    context.fillStyle = '#3a3a3a';
+    context.beginPath();
+    context.arc(cx, cy + size * 0.08, size * 0.3, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = '#ff8a3d';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(cx, cy - size * 0.2);
+    context.lineTo(cx + size * 0.18, cy - size * 0.38);
+    context.stroke();
+  }
   context.globalAlpha = 1;
 }
 
@@ -283,6 +346,7 @@ function init() {
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
+  bombThreshold = COVER_START;
   lastTime = performance.now();
   next = randomPiece();
   spawn();

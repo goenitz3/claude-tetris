@@ -36,6 +36,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - Tablero de **10 × 20** celdas.
 - Las **7 piezas estándar** (I, O, T, S, Z, J, L) con colores diferenciados.
 - La **tuerca**: pieza extra de 3 × 3 con el centro hueco. Sale rara vez (~10 %) y al fijarse deja un agujero que no se puede rellenar lateralmente, así que bloquea la línea hasta que consigas taparlo.
+- La **bomba** (_powerup_ de rescate): cuando el tablero supera el **50 % de ocupación**, la siguiente pieza es una bomba negra de una celda. Se mueve como cualquier pieza pero **no rota**, y al aterrizar destruye un área de **3 × 3** de la pila, abriendo un hueco donde volver a encajar piezas (10 puntos por bloque destruido). Después vuelve a caer cada **+10 %** de ocupación (60 %, 70 %…); si limpias el tablero por debajo del 50 %, el contador se rearma y no reaparece hasta que vuelvas a superar ese 50 %.
 - **Rotación** con _wall kicks_ básicos (pequeños desplazamientos para que la pieza pueda rotar pegada a la pared).
 - **Soft drop** (bajada acelerada) y **hard drop** (caída instantánea).
 - **Pieza fantasma** (_ghost piece_): muestra dónde aterrizará la pieza actual.
@@ -87,6 +88,8 @@ Después abre `http://localhost:8000` en el navegador.
 | `Espacio` | Hard drop (caída instantánea)     |
 | `P`       | Pausar / reanudar                 |
 
+> La bomba se mueve y se lanza igual que el resto de piezas, pero ignora la rotación.
+
 ---
 
 ## Cómo funciona
@@ -109,7 +112,8 @@ Aporta el aspecto visual con estética _dark / retro arcade_: fondo oscuro, tipo
 
 Contiene toda la lógica del juego. A grandes rasgos:
 
-- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–8) que identifica la pieza.
+- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–8) que identifica la pieza. La bomba (índice `9`) nunca llega a fijarse: detona y desaparece.
+- **Bomba** (`coverage` / `checkBomb` / `explode`): tras fijar cada pieza se mide la ocupación del tablero; si cruza el umbral vigente (50 % y luego cada +10 %), la bomba se inyecta como pieza siguiente. Al aterrizar, `explode()` borra un 3 × 3 —su columna ±1 y su fila + las 2 de abajo, porque la bomba se posa *sobre* la pila— sin colapsar el resto: el hueco se queda ahí.
 - **Piezas**: definidas como matrices cuadradas. Para rotar se calcula la transposición + reverso de filas (`rotateCW`).
 - **Detección de colisiones** (`collide`): comprueba que ninguna celda de la pieza salga del tablero ni se solape con bloques ya fijados.
 - **Wall kicks** (`tryRotate`): si la rotación choca, intenta desplazar la pieza ±1 y ±2 columnas antes de descartar el giro.
@@ -174,7 +178,11 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `COLS`         | Columnas del tablero                     | `10`                  |
 | `ROWS`         | Filas del tablero                        | `20`                  |
 | `BLOCK`        | Tamaño en píxeles de cada celda          | `30`                  |
-| `COLORS`       | Paleta de colores por tipo de pieza      | 7 colores             |
+| `COLORS`       | Paleta de colores por tipo de pieza      | 9 colores             |
+| `NUT_CHANCE`   | Probabilidad de que salga la tuerca      | `0.1`                 |
+| `COVER_START`  | Ocupación que dispara la primera bomba   | `0.5`                 |
+| `COVER_STEP`   | Ocupación extra entre bombas             | `0.1`                 |
+| `BOMB_SIZE`    | Lado del área que destruye la bomba      | `3`                   |
 | `LINE_SCORES`  | Puntos por 1, 2, 3 o 4 líneas eliminadas | `[0,100,300,500,800]` |
 | `dropInterval` | Velocidad inicial de caída en ms         | `1000`                |
 
