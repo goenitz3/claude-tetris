@@ -52,6 +52,47 @@
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+      <div class="pause-box">
+        <p id="pause-title">PAUSA</p>
+        <div class="pause-content">
+          <div class="pause-section">
+            <button id="resume-btn" class="pause-button">Reanudar</button>
+            <button id="restart-pause-btn" class="pause-button">Reiniciar</button>
+          </div>
+          <div class="pause-section">
+            <p class="pause-label">Nivel inicial:</p>
+            <select id="level-select" class="level-select">
+              <option value="1">Nivel 1</option>
+              <option value="2">Nivel 2</option>
+              <option value="3">Nivel 3</option>
+              <option value="4">Nivel 4</option>
+              <option value="5">Nivel 5</option>
+              <option value="6">Nivel 6</option>
+              <option value="7">Nivel 7</option>
+              <option value="8">Nivel 8</option>
+              <option value="9">Nivel 9</option>
+              <option value="10">Nivel 10</option>
+            </select>
+          </div>
+          <div class="pause-section">
+            <button id="controls-btn" class="pause-button">Ver controles</button>
+          </div>
+        </div>
+        <div id="controls-panel" class="controls-panel hidden">
+          <p class="pause-label">Controles:</p>
+          <ul class="controls-list">
+            <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+            <li><kbd>↑</kbd> rotar</li>
+            <li><kbd>↓</kbd> bajar</li>
+            <li><kbd>Space</kbd> caída</li>
+            <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
+          </ul>
+          <button id="back-controls-btn" class="pause-button">Atrás</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="game.js"></script>
